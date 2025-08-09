@@ -1,0 +1,79 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mariadb-pvc
+  namespace: agroflow
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mariadb
+  namespace: agroflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: mariadb }
+  template:
+    metadata:
+      labels: { app: mariadb }
+    spec:
+      containers:
+      - name: mariadb
+        image: mariadb:10.11
+        ports:
+        - containerPort: 3306
+        env:
+        - name: MARIADB_DATABASE
+          valueFrom: { configMapKeyRef: { name: agroflow-config, key: MARIADB_DB } }
+        - name: MARIADB_USER
+          valueFrom: { secretKeyRef: { name: db-secrets, key: mariadb-user } }
+        - name: MARIADB_PASSWORD
+          valueFrom: { secretKeyRef: { name: db-secrets, key: mariadb-password } }
+        - name: MARIADB_ROOT_PASSWORD
+          value: root
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/mysql
+        - name: init
+          mountPath: /docker-entrypoint-initdb.d
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: mariadb-pvc
+      - name: init
+        configMap:
+          name: mariadb-init-sql
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mariadb-init-sql
+  namespace: agroflow
+data:
+  init.sql: |
+    CREATE TABLE IF NOT EXISTS facturas (
+      factura_id CHAR(36) PRIMARY KEY,
+      cosecha_id CHAR(36) NOT NULL,
+      monto_total DECIMAL(10,2) NOT NULL,
+      pagado BOOLEAN DEFAULT FALSE,
+      fecha_emision TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      metodo_pago VARCHAR(30),
+      codigo_qr TEXT
+    );
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb
+  namespace: agroflow
+spec:
+  selector: { app: mariadb }
+  ports:
+  - port: 3306
+    targetPort: 3306

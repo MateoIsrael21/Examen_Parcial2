@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: facturacion
+  namespace: agroflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: facturacion }
+  template:
+    metadata:
+      labels: { app: facturacion }
+    spec:
+      containers:
+      - name: facturacion
+        image: <tu-dockerhub>/facturacion:v1.0
+        ports:
+        - containerPort: 3003
+        env:
+        - name: PORT
+          value: "3003"
+        - name: MARIADB_HOST
+          valueFrom: { configMapKeyRef: { name: agroflow-config, key: MARIADB_HOST } }
+        - name: MARIADB_PORT
+          valueFrom: { configMapKeyRef: { name: agroflow-config, key: MARIADB_PORT } }
+        - name: MARIADB_DB
+          valueFrom: { configMapKeyRef: { name: agroflow-config, key: MARIADB_DB } }
+        - name: MARIADB_USER
+          valueFrom: { secretKeyRef: { name: db-secrets, key: mariadb-user } }
+        - name: MARIADB_PASSWORD
+          valueFrom: { secretKeyRef: { name: db-secrets, key: mariadb-password } }
+        - name: RABBIT_URL
+          valueFrom: { secretKeyRef: { name: rabbitmq-secret, key: rabbit-url } }
+        - name: CENTRAL_BASE_URL
+          valueFrom: { configMapKeyRef: { name: agroflow-config, key: CENTRAL_BASE_URL } }
+        readinessProbe:
+          httpGet: { path: /health, port: 3003 }
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          httpGet: { path: /health, port: 3003 }
+          initialDelaySeconds: 30
+          periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: facturacion
+  namespace: agroflow
+spec:
+  selector: { app: facturacion }
+  ports:
+  - port: 3003
+    targetPort: 3003

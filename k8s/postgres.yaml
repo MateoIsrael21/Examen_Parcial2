@@ -1,0 +1,88 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: agroflow
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: agroflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: postgres }
+  template:
+    metadata:
+      labels: { app: postgres }
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:14
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          valueFrom: { configMapKeyRef: { name: agroflow-config, key: PG_DB } }
+        - name: POSTGRES_USER
+          valueFrom: { secretKeyRef: { name: db-secrets, key: pg-user } }
+        - name: POSTGRES_PASSWORD
+          valueFrom: { secretKeyRef: { name: db-secrets, key: pg-password } }
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+        - name: init
+          mountPath: /docker-entrypoint-initdb.d
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+      - name: init
+        configMap:
+          name: postgres-init-sql
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-sql
+  namespace: agroflow
+data:
+  init.sql: |
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+    CREATE TABLE IF NOT EXISTS agricultores (
+      agricultor_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      nombre VARCHAR(100) NOT NULL,
+      finca VARCHAR(100) NOT NULL,
+      ubicacion VARCHAR(100) NOT NULL,
+      correo VARCHAR(150) UNIQUE NOT NULL,
+      fecha_registro TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS cosechas (
+      cosecha_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      agricultor_id UUID REFERENCES agricultores(agricultor_id),
+      producto VARCHAR(50) NOT NULL,
+      toneladas DECIMAL(10,2) CHECK (toneladas >= 0) NOT NULL,
+      estado VARCHAR(20) DEFAULT 'REGISTRADA',
+      creado_en TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      factura_id UUID NULL
+    );
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: agroflow
+spec:
+  selector: { app: postgres }
+  ports:
+  - port: 5432
+    targetPort: 5432

@@ -1,0 +1,101 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports: ["5672:5672","15672:15672"]
+    volumes: [rabbitmq_data:/var/lib/rabbitmq]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: agroflow
+      POSTGRES_USER: agro
+      POSTGRES_PASSWORD: agro
+    ports: ["5432:5432"]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db-init/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agro -d agroflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mariadb:
+    image: mariadb:10.11
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: facturacion
+      MARIADB_USER: fact
+      MARIADB_PASSWORD: fact
+    ports: ["3307:3306"]
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./db-init/mariadb-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -proot || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  central:
+    image: docker.io/vladiip/central:v1.0
+    build: ./central
+    environment:
+      PORT: 3001
+      PG_HOST: postgres
+      PG_PORT: 5432
+      PG_DB: agroflow
+      PG_USER: agro
+      PG_PASSWORD: agro
+      RABBIT_URL: amqp://guest:guest@rabbitmq:5672
+      CENTRAL_BASE_URL: http://central:3001
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    ports: ["3001:3001"]
+
+  inventario:
+    image: docker.io/vladiip/inventario:v1.0
+    build: ./inventario
+    environment:
+      PORT: 3002
+      MYSQL_HOST: mariadb
+      MYSQL_PORT: 3306
+      MYSQL_DB: inventario
+      MYSQL_USER: inv
+      MYSQL_PASSWORD: inv
+      RABBIT_URL: amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      mariadb: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    ports: ["3002:3002"]
+
+  facturacion:
+    image: docker.io/vladiip/facturacion:v1.0
+    build: ./facturacion
+    environment:
+      PORT: 3003
+      MARIADB_HOST: mariadb
+      MARIADB_PORT: 3306
+      MARIADB_DB: facturacion
+      MARIADB_USER: fact
+      MARIADB_PASSWORD: fact
+      RABBIT_URL: amqp://guest:guest@rabbitmq:5672
+      CENTRAL_BASE_URL: http://central:3001
+    depends_on:
+      mariadb: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    ports: ["3003:3003"]
+
+volumes:
+  rabbitmq_data:
+  postgres_data:
+  mariadb_data:

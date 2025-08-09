@@ -1,0 +1,16 @@
+{
+  "name": "facturacion",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "amqplib": "^0.10.3",
+    "axios": "^1.7.4",
+    "express": "^4.19.2",
+    "mariadb": "^3.2.1",
+    "uuid": "^9.0.1"
+  }
+}

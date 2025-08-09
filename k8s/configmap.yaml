@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agroflow-config
+  namespace: agroflow
+data:
+  PG_HOST: postgres
+  PG_PORT: "5432"
+  PG_DB: agroflow
+  MYSQL_HOST: mysql
+  MYSQL_PORT: "3306"
+  MYSQL_DB: inventario
+  MARIADB_HOST: mariadb
+  MARIADB_PORT: "3306"
+  MARIADB_DB: facturacion
+  CENTRAL_BASE_URL: http://central:3001
